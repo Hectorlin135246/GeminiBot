@@ -12,7 +12,7 @@ TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 client = genai.Client(api_key=GEMINI_API_KEY)
 TG_API_URL = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
 
-# 1. 建立偽裝的 Web Server 讓 Render 的 Health Check 通過
+# 1. 建立微型 Web Server 供 Render 健康檢查通過
 class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -36,7 +36,7 @@ def send_tg_message(chat_id, text):
 
 # 3. Gemini 提問
 def ask_gemini(prompt):
-    models_to_try = ['gemini-3.8-flash', 'gemini-2.0-flash']
+    models_to_try = ['gemini-2.5-flash', 'gemini-2.0-flash']
     for model_name in models_to_try:
         try:
             response = client.models.generate_content(
