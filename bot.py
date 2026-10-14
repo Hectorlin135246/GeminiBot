@@ -1,15 +1,31 @@
 import os
 import time
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
 import requests
 from google import genai
 
-# 從 Render 雲端環境變數讀取（安全作法）
+# 從環境變數讀取 API Key 與 Token
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
 client = genai.Client(api_key=GEMINI_API_KEY)
 TG_API_URL = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
 
+# 1. 建立偽裝的 Web Server 讓 Render 的 Health Check 通過
+class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"Bot is running!")
+
+def run_web_server():
+    port = int(os.environ.get("PORT", 8080))
+    server = HTTPServer(("0.0.0.0", port), SimpleHTTPRequestHandler)
+    print(f"🌐 網頁伺服器已啟動於 Port {port}，供 Render 健康檢查...")
+    server.serve_forever()
+
+# 2. Telegram 發送訊息
 def send_tg_message(chat_id, text):
     url = f"{TG_API_URL}/sendMessage"
     payload = {"chat_id": chat_id, "text": text}
@@ -18,6 +34,7 @@ def send_tg_message(chat_id, text):
     except Exception as e:
         print(f"發送 Telegram 訊息失敗: {e}")
 
+# 3. Gemini 提問
 def ask_gemini(prompt):
     models_to_try = ['gemini-3.8-flash', 'gemini-2.0-flash']
     for model_name in models_to_try:
@@ -33,7 +50,11 @@ def ask_gemini(prompt):
             time.sleep(1)
     return "🤖 Gemini 伺服器目前較繁忙，請稍後再試！"
 
+# 4. 主程式：同時運行 Web 伺服器與 Telegram 長輪詢
 def main():
+    # 在背景執行網頁伺服器
+    threading.Thread(target=run_web_server, daemon=True).start()
+
     print("🚀 雲端 Telegram Gemini 機器人啟動成功，監聽中...")
     offset = -1
     while True:
